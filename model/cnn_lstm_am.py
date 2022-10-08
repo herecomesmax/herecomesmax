@@ -35,12 +35,13 @@ from tensorflow_core.python.keras.layers import Dropout, Dense, Attention, Repea
     Flatten
 
 df=pd.read_csv('https://raw.githubusercontent.com/herecomesmax/herecomesmax/data/datas.csv',index_col=0)
-#把close即收盘价放到第一列
+
+# PUT THE CLOSE PRICE THE THE FIRST COLUMN
 col=df.columns[[1,0,2,3,4]]
 df=df[col]
 df.head()
 
-#把数据转为array类型，并划分训练集和测试集长度
+# TRANSFORM THE DATA TO AN ARRAY, AND SPLIT TRAINING/TESTING DATA
 values = df.values
 X=values[:,1:5]
 Y=values[:,0].reshape(-1,1)
@@ -48,7 +49,7 @@ y_len=len(Y)
 test_len=458
 tran_len=y_len-test_len
 
-#显示训练数据
+# SHOW TRAINING DATA
 aa = [x for x in range(tran_len)]
 plt.plot(aa, Y[:tran_len])
 plt.ylabel('colse', size=15)
@@ -56,7 +57,7 @@ plt.xlabel('Time', size=15)
 plt.legend(fontsize=15)
 plt.show()
 
-#显示测试集的数据
+# SHOW TESTING DATA
 aa = [x for x in range(test_len)]
 plt.plot(aa, Y[tran_len:])
 plt.ylabel('close', size=15)
@@ -64,7 +65,7 @@ plt.xlabel('Time', size=15)
 plt.legend(fontsize=15)
 plt.show()
 
-#对X和y分别进行归一化
+# X,Y STANDARDIZATION
 from sklearn.preprocessing import MinMaxScaler
 
 scX = MinMaxScaler(feature_range=(0, 1))
@@ -78,8 +79,8 @@ data=np.concatenate((scaledX, scaledY), axis=1)
 data_train=data[:tran_len,:]
 data_test=data[tran_len:,:]
 
-seq_len = 5  #时间步长 t-5,t-4,t-3,t-2,t-1 --->t
-#转换成LSTM所需格式，（样本数，步长，特征数）
+seq_len = 5  # TIME STEP t-5,t-4,t-3,t-2,t-1 --->t
+# TRANSFORM TO LSTM DATA FORM (SAMPLE, TIME STEP, FEATURES)
 X_train = np.array([data_train[i : i + seq_len, 0:4] for i in range(data_train.shape[0] - seq_len)])
 y_train = np.array([data_train[i + seq_len, 4] for i in range(data_train.shape[0]- seq_len)])
 X_test = np.array([data_test[i : i + seq_len, 0:4] for i in range(data_test.shape[0]- seq_len)])
@@ -87,15 +88,16 @@ y_test = np.array([data_test[i + seq_len, 4] for i in range(data_test.shape[0] -
 
 print(X_train.shape,y_train.shape,X_test.shape,y_test.shape)
 
-#网络模型keras
-#网络结构模型训练次数和参数等都不是最优的，需要自己结合自己数据来调
-inputs = Input(shape=(X_train.shape[1], X_train.shape[2]))  # 构建输入的大小，即张量
+# KERAS MODEL
+# PLEASE CONDUCT MORE EXPERIMENTS AND FIND THE BEST PARAMETER
+inputs = Input(shape=(X_train.shape[1], X_train.shape[2]))  
 cnn1 =Conv1D(filters=10,kernel_size=32, padding='same', strides=1, activation='relu',input_shape=(X_train.shape[1], X_train.shape[2]))(inputs)
 cnn2 =Conv1D(filters=10,kernel_size=64, padding='same', strides=1, activation='relu',input_shape=(X_train.shape[1], X_train.shape[2]))(cnn1)
 mp=MaxPooling1D(pool_size=1,strides=1)(cnn2)
 ft=Flatten()(mp)
 rp=RepeatVector(30)(ft)
 lt=LSTM(100)(rp)
+# I ADDED THIS ATTENTION LAYER, BUT THE RESULT TURNED OUT NOT SO GOOD. FURTHER INVESTIGATIONS ARE REQUIRED SO PLEASE...
 #attention_layer=Attention()([lt,lt])
 #dp=Dropout(0.2)(attention_layer)
 out_layer = Dense(1, activation='linear')(lt)  #
@@ -104,7 +106,7 @@ model.compile(optimizer='adam', loss='mean_squared_error')
 # fit network
 history = model.fit(X_train, y_train, epochs=100, batch_size=70, validation_data=(X_test, y_test), verbose=2, shuffle=False)
 
-# 显示训练的loss值情况
+# SHOW THE TRAINING LOSS
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
 plt.title('model loss')
@@ -113,14 +115,14 @@ plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper right')
 plt.show()
 
-# 做预测
+# PREDICTION
 yhat = model.predict(X_test)
-#反归一化预测值
+# RESTORATION Y-HAT
 inv_yhat = scY.inverse_transform(yhat)
-# 反归一化真实值
+# RESTORATION Y-TEST
 inv_y = scY.inverse_transform(y_test.reshape(-1,1))
 
-# 计算 RMSE
+# METRICS CALCULATION
 rmse = np.sqrt(mean_squared_error(inv_y, inv_yhat))
 print('Test RMSE: %.3f' % rmse)
 mse=mean_squared_error(inv_y, inv_yhat)
