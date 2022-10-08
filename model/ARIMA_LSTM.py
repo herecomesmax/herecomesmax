@@ -24,18 +24,19 @@ from tensorflow_core.python.keras import Sequential
 from tensorflow_core.python.keras.layers import LSTM, Dropout, Dense
 
 
-#arima-lstm---arima--lstm--->predict
-#读入数据
+# arima-lstm---arima--lstm--->predict
+# LOAD DATA
 data_raw = pd.read_csv('https://raw.githubusercontent.com/herecomesmax/herecomesmax/data/IXIC_w_EV.csv')
 df = pd.read_csv('https://raw.githubusercontent.com/herecomesmax/herecomesmax/data/IXIC_w_EV.csv')
-#选出value特征
+# GET FEATURES
 features=['Close']
 data_raw=data_raw[features]
 
 CPI = df['CPI']
 print(CPI)
-#下面这段用于寻找arima参数，若不会用可不用
-# 用于寻找arima的p,q,d
+
+#FINDING THE BEST p, q, d FOR ARIMA
+#OR TEST THE HYPER PARAMETERS USING PMDARImA
 
 q_arima = range(0, 6)
 d_arima = 0
@@ -54,9 +55,9 @@ for pdq in pdqs:
     except:
         continue
 
-# /输出最终的pqd
+#GET pqd
 
-# 训练arima网络
+#TRAIN ARIMA
 index=AIC_arima.index(min(AIC_arima))
 order = ARIMAX_model[index]
 print('order num',order)
@@ -64,7 +65,7 @@ print('order num',order)
 #data_raw= data_raw.drop([0])
 
 
-#训练Arima
+#TRAIN ARIMA
 order=(0,4,5)
 #mod = sm.tsa.arima.model.ARIMA(data_raw, order=(1, 0, 0))
 mod = ARIMA(data_raw,CPI, order=(6,0,4))
@@ -73,7 +74,7 @@ mod = ARIMA(data_raw,CPI, order=(6,0,4))
 model = ARIMA(data_raw, order=(0,4,5))
 fit = model.fit()
 
-# 获得ARIMA的预测值
+#GET ARIMA PREDICTION
 forr = fit.forecast
 print(forr)
 
@@ -85,7 +86,7 @@ preds_pd.index -= 1
 
 
 
-#根据arima模型预测的值构建新的数据
+# USING THE ARIMA OUTPUT TO CONSTRUCT A NEW DATASET
 arima_result = pd.DataFrame(columns=['Close'])
 arima_result['Close'] = data_raw['Close']
 arima_result['predicted'] = preds
@@ -93,12 +94,12 @@ arima_result['residuals'] = arima_result['Close'] - arima_result['predicted']
 
 
 
-# 根据新的数据，构建训练lstm的数据
+# USE THE OUTPUT OF ARIMA AS THE INPUT OF LSTM LAYER
 new_data = arima_result
 lstm_data = new_data['residuals'][:].values.astype(float)
 
 
-# 划分训练集和测试集
+# DATA SPLIT
 def split_data(value, timestep, test_percentage):
     data_in = value
     data = []
@@ -143,19 +144,19 @@ def series_to_supervised(data, n_in, n_out, dropnan=True):
         agg.dropna(inplace=True)
     return agg
 
-#生成LSTM所需要的3维数据格式,(样本数，时间步长，特征数)
+# GENERATE THE 3D LSTM DATASET (SAMPLE, TIME STEP, FEATURES)
 def dataprepare(values,timestep):
     reframed = series_to_supervised(values,timestep, 1)#X,y
 
     values = reframed.values
-    #划分训练集和测试集
+    # TRAINING/TESTING SET SPLIT
     train = values[1:train_len, :]
     test = values[train_len:, :]
-    #得到对应的X和label（即y）
+    # GET THE CORRESPONDNIG X AND Y LABEL
     train_X, train_y = train[:, :-1], train[:, -1]
     test_X, test_y = test[:, :-1], test[:, -1]
 
-    # 把输入重塑成3D格式 [样例，时间步， 特征]
+    # RESHAPE DATA
     train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
     test_X = test_X.reshape((test_X.shape[0], 1, test_X.shape[1]))
 
@@ -166,26 +167,26 @@ def dataprepare(values,timestep):
 
 
 
-# 归一化处理
+# STANDARDIZATION
 scaler = MinMaxScaler(feature_range=(-1, 1))
 scaler_data = scaler.fit_transform(lstm_data.reshape(-1, 1))
-#去掉数据中的nan
+# DROP NAN
 scaler_data=scaler_data[~np.isnan(scaler_data).any(axis=1), :]
-#获得用于训练lstm的数据
+# GET THE TRAINING DATA FOR LSTM
 
-#划分训练集和测试集长度
+# TRAINING/TESTING SET SPLIT
 train_len = int(len(data_raw) * 0.7)
 test_len=len(data_raw)-train_len
 print(train_len)
 #
-timestep = 24  #滑动窗口
+timestep = 24  #SLIDING WINDOW
 x_train, y_train, x_test, y_test = dataprepare(scaler_data,timestep)
-#打印数据形式
+# PRINT DATA
 print('x_train.shape = ', x_train.shape)
 print('y_train.shape = ', y_train.shape)
 print('x_test.shape = ', x_test.shape)
 print('y_test.shape = ', y_test.shape)
-#lstm网络
+# LSTM
 model = Sequential()
 
 model.add(LSTM(units=128, input_shape=(x_train.shape[1], x_train.shape[2]),activation='tanh',return_sequences=True))
@@ -193,28 +194,28 @@ model.add(LSTM(units=128,activation='tanh',return_sequences=False))
 model.add(Dropout(0.2))
 model.add(Dense(1))
 model.compile(loss='mean_squared_error', optimizer='adam')
-#训练
+# TRAIN MODEL
 history = model.fit(x_train, y_train, epochs=50, batch_size=32, callbacks=None, validation_split=None,validation_data=None, shuffle=False, verbose=2)
 
 
-# 预测测试集数据
+# GET PREDICTIONS
 model.save('xx.h5')
 y_test_pred = model(x_test)
 
-#对x_test进行反归一化
+# RESTORATION X TEST
 
 test_X = x_test.reshape((x_test.shape[0], x_test.shape[2]))
 y_test_pred = concatenate((y_test_pred, test_X[:, 1:]), axis=1)
 y_test_pred = scaler.inverse_transform(y_test_pred)
 y_test_pred = y_test_pred[:, 0]
 
-#对y_test进行反归一化
+# RESTORATION Y TEST
 y_testy = y_test.reshape((len(y_test), 1))
 y_testy = concatenate((y_testy, test_X[:, 1:]), axis=1)
 y_testy = scaler.inverse_transform(y_testy)
 y_testy = y_testy[:, 0]
 
-#计算指标
+# METRICS
 test_mse = mean_squared_error(y_testy, y_test_pred)
 test_mae = mean_absolute_error(y_testy, y_test_pred)
 test_rmse = np.sqrt(test_mse)
@@ -228,13 +229,13 @@ print(f'X_test RMSE: {test_rmse}')
 print(f'X_test R-sq: {test_rsq}')
 
 
-#draw_test为最终得到整个arima-lstm模型的预测结果
+# STORE THE PREDICTION OF ARIMA-LSTM AS draw_test
 draw_test = new_data['predicted'][-len(y_test_pred):].values.astype(float)+y_test_pred
 draw_test=draw_test.reshape(-1,1)
-#显示预测结果
+# PLOT THE RESULT
 plt.plot(new_data['Close'], label="Reference", color='tab:blue')
 print(len(new_data),len(x_train)+26)
-#26用来将途中的数据移到与之对应的位置，方便好看
+# SHITF DATA TO BETTER CORRESPOND AND COMPARE
 plt.plot(range(len(x_train)+26,len(new_data)),draw_test, color='orange',label='test_Prediction')
 plt.title('Prediction', size=12)
 plt.legend()
@@ -262,7 +263,9 @@ df2.head()
 plt.plot(df2[['Close']])
 
 
-#####################################################
+################################################
+################################################
+#TESTING SINGLE LSTM SHOWN BELOW
 
 price = df2[['Close']]
 price.info()
