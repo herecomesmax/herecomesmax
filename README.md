@@ -10,3 +10,4 @@
 * CNN-BiLSTM-AM
 ## For long-term data, the evaluated models are as follows
 * ARIMA-LSTM
+## A Final Report was presented with details in the file
